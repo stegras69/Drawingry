@@ -67,10 +67,23 @@ h2{font-size:1.15rem;margin:0 0 10px;font-weight:900}
 .timer.low{background:var(--M)}
 .icon{border:0;background:var(--panel);color:var(--ink);border-radius:12px;width:40px;height:40px;cursor:pointer;font-size:1.1rem;display:grid;place-items:center}
 
-.board{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-bottom:10px}
-.sq{position:relative;aspect-ratio:1;border-radius:7px;background:var(--c);display:flex;align-items:flex-start;justify-content:flex-start;padding:2px 3px;font-size:.6rem;font-weight:900;color:rgba(0,0,0,.55)}
-.sq.ap{color:#fff}
-.sq.last{box-shadow:0 0 0 2px var(--gold)}
+.board{display:grid;grid-template-columns:repeat(11,1fr);gap:3px;margin-bottom:10px}
+.sq{position:relative;aspect-ratio:6/5;border-radius:7px;background:var(--c);display:flex;align-items:flex-start;justify-content:flex-start;padding:2px 3px;font-size:.6rem;font-weight:900;color:rgba(0,0,0,.55)}
+.sq.ap{color:#fff;box-shadow:inset 0 0 0 2px #fff}
+.sq.wild{background:conic-gradient(var(--O),var(--P),var(--A),var(--D),var(--M),var(--O));color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.sq.start{box-shadow:inset 0 0 0 2px #fff}
+.sq.last{box-shadow:0 0 0 2px var(--gold),inset 0 0 0 2px #fff}
+.center{grid-column:2 / 11;grid-row:2 / 7;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:4px;min-width:0}
+.center .event{margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 6px;justify-content:center;font-size:.68rem;font-weight:800;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.legend i{width:12px;height:12px;border-radius:3px;background:var(--c);display:inline-block}
+.legend i.w{background:conic-gradient(var(--O),var(--P),var(--A),var(--D),var(--M),var(--O))}
+.legend i.t{background:var(--panel);box-shadow:inset 0 0 0 2px #fff}
+.center .ttl{font-family:var(--hand);font-size:1.5rem;text-align:center;line-height:1}
+.picks{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.pick{border:0;border-radius:12px;padding:12px;font-weight:900;cursor:pointer;background:var(--c);color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+@media (max-width:420px){.center .ttl{display:none}.legend{font-size:.6rem}.center .event{padding:6px 8px;font-size:.8rem}.center .die{width:30px;height:30px;font-size:1.05rem}}
 .tokens{position:absolute;inset:auto 2px 2px auto;display:flex;flex-wrap:wrap-reverse;justify-content:flex-end;gap:2px;max-width:100%}
 .tok{width:11px;height:11px;border-radius:50%;background:var(--tc);border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.4)}
 .tok.ctl{animation:bob .8s infinite alternate}
@@ -176,8 +189,17 @@ canvas#pad{width:100%;height:100%;display:block;background:var(--paper);border-r
     <div class="me" id="g-me"></div>
     <div class="timer" id="g-timer">1:00</div>
   </div>
-  <div class="board" id="g-board" aria-label="Tabellone"></div>
-  <div class="event" id="g-event" hidden></div>
+  <div class="board" id="g-board" aria-label="Tabellone">
+    <div class="center">
+      <div class="ttl" id="g-ttl">Drawingry</div>
+      <div class="event" id="g-event" hidden></div>
+      <div class="legend" id="g-legend">
+        <span><i style="--c:var(--O)"></i>O Oggetto</span><span><i style="--c:var(--P)"></i>P Persona/luogo/animale</span>
+        <span><i style="--c:var(--A)"></i>A Azione</span><span><i style="--c:var(--D)"></i>D Difficile</span>
+        <span><i style="--c:var(--M)"></i>M Varie</span><span><i class="t"></i>TG Tutti giocano</span><span><i class="w"></i>J Jolly</span>
+      </div>
+    </div>
+  </div>
   <div class="save" id="g-save" hidden></div>
   <div class="wordcard" id="g-card"></div>
   <div class="canvas-box">
@@ -222,9 +244,30 @@ const TEAMS = [
   {id:'gialli', name:'Gialli', color:'#f2b81c'},
 ];
 const TEAM = Object.fromEntries(TEAMS.map(t=>[t.id,t]));
-// Tabellone: 32 caselle, "Tutti giocano" ogni 6, ultima casella finale
-const BOARD = Array.from({length:32}, (_,i)=> i===0 ? 'O' : i===31 ? 'AP' : (i%6===5 ? 'AP' : ['P','A','D','M','O'][(i-1)%5]));
+CATS.J = {n:'Jolly: scegli la categoria', c:'var(--O)'};
+// Tabellone ad anello come il Pictionary: 32 caselle attorno al bordo (11x7), partenza in alto a sinistra, senso orario.
+// Partenza gialla (Oggetto), poi i colori in sequenza; caselle Tutti giocano (TG) colorate, caselle Jolly, ultima casella = Tutti giocano finale.
+const WILD = [9,20,27];
+const BOARD = Array.from({length:32}, (_,i)=>{
+  if(i===0) return {c:'O', start:true};
+  if(i===31) return {c:null, ap:true, last:true};
+  if(WILD.includes(i)) return {c:'J', wild:true};
+  return {c:['P','A','D','M','O'][(i-1)%5], ap: i%6===5};
+});
 const LAST = BOARD.length-1;
+const COLS = 11, ROWS = 7;
+function ringCell(i){ // indice -> [riga, colonna] (1-based per la griglia CSS)
+  if(i < COLS) return [1, i+1];
+  i -= COLS; if(i < ROWS-2) return [i+2, COLS];
+  i -= ROWS-2; if(i < COLS) return [ROWS, COLS-i];
+  i -= COLS; return [ROWS-1-i, 1];
+}
+const rollDie = () => 1+Math.floor(Math.random()*6);
+function startRolls(s){ // dado di partenza: chi fa il numero più alto inizia (i pareggi ritirano)
+  let rolls, best, top;
+  do { rolls = {}; s.order.forEach(t=>rolls[t]=rollDie()); best = Math.max(...Object.values(rolls)); top = s.order.filter(t=>rolls[t]===best); } while(top.length>1);
+  return {rolls, first: top[0]};
+}
 
 const WORDS = {
   O:['ombrello','forbici','chitarra','lampadina','frigorifero','bicicletta','occhiali','candela','telescopio','martello','valigia','orologio','sedia a dondolo','cuscino','aquilone','termometro','scala','ventilatore','macchina fotografica','spazzolino','pentola','mappamondo','zaino','cavatappi','lavatrice','altalena','tenda da campeggio','paracadute','bussola','televisore','ferro da stiro','microfono','salvadanaio','pattini','cappello','calzino','cerotto','forchetta','lucchetto','pinzette'],
@@ -282,11 +325,10 @@ function nextDrawer(s, t){
   return id;
 }
 function newRound(s, teamId){
-  const pos = s.teams[teamId].pos;
-  const sq = BOARD[pos];
-  const ap = sq==='AP';
-  const cat = ap ? ['O','P','A','D','M'][Math.floor(Math.random()*5)] : sq;
-  s.card = {cat, word:pickWord(s,cat), ap};
+  const sq = BOARD[s.teams[teamId].pos];
+  const ap = !!sq.ap;
+  if(sq.wild) s.card = {cat:null, word:null, ap:false, wild:true};
+  else { const cat = sq.c || ['O','P','A','D','M'][Math.floor(Math.random()*5)]; s.card = {cat, word:pickWord(s,cat), ap}; }
   s.allPlay = ap;
   s.drawers = {};
   (ap ? s.order : [teamId]).forEach(t=>{ const d = nextDrawer(s,t); if(d) s.drawers[t]=d; });
@@ -298,11 +340,17 @@ const A = {
     if(s.phase!=='lobby') return false;
     s.order = TEAMS.map(t=>t.id).filter(t=>playersOf(s,t).length);
     if(!s.order.length) return false;
-    s.control = s.order[0];
-    s.ev = {t:'start'};
+    const r = startRolls(s);
+    s.control = r.first;
+    s.ev = {t:'start', rolls:r.rolls, first:r.first};
     newRound(s, s.control);
   },
-  go(s){ if(s.phase!=='ready') return false; s.phase='drawing'; s.endsAt = Date.now()+ROUND_MS; },
+  pick(s, cat){
+    if(s.phase!=='ready' || !s.card || !s.card.wild || s.card.word || !WORDS[cat]) return false;
+    if(s.drawers[s.control]!==myId) return false;
+    s.card.cat = cat; s.card.word = pickWord(s, cat);
+  },
+  go(s){ if(s.phase!=='ready' || !s.card || !s.card.word) return false; s.phase='drawing'; s.endsAt = Date.now()+ROUND_MS; },
   guessed(s, team){
     if(s.phase!=='drawing') return false;
     if(!s.allPlay && team!==s.control) return false;
@@ -314,7 +362,7 @@ const A = {
   },
   roll(s){
     if(s.phase!=='roll') return false;
-    const r = 1+Math.floor(Math.random()*6), t = s.control;
+    const r = rollDie(), t = s.control;
     const from = s.teams[t].pos;
     s.teams[t].pos = Math.min(LAST, from+r);
     s.ev = {t:'roll', team:t, roll:r, word:s.ev && s.ev.word, last:s.teams[t].pos===LAST};
@@ -334,7 +382,7 @@ const A = {
   again(s){
     if(s.phase!=='finished') return false;
     TEAMS.forEach(t=>{ s.teams[t.id].pos=0; });
-    s.winner=null; s.control=s.order[0]; s.ev={t:'start'};
+    s.winner=null; const r = startRolls(s); s.control=r.first; s.ev={t:'start', rolls:r.rolls, first:r.first};
     newRound(s, s.control);
   }
 };
@@ -605,23 +653,22 @@ function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;'
 function renderGame(){
   const mt = myTeam();
   $('g-me').innerHTML = (mt ? teamTag(mt)+' ' : 'Spettatore · ') + esc(myName()) + ' · ' + code;
-  // tabellone a serpentina
-  const bd = $('g-board'); bd.innerHTML='';
-  const cols = 8;
-  for(let r=0;r<BOARD.length/cols;r++){
-    for(let c=0;c<cols;c++){
-      const i = r*cols + (r%2 ? cols-1-c : c);
-      const sq = document.createElement('div');
-      const k = BOARD[i];
-      sq.className = 'sq' + (k==='AP'?' ap':'') + (i===LAST?' last':'');
-      sq.style.setProperty('--c', CATS[k].c);
-      sq.textContent = i===0 ? 'VIA' : i===LAST ? 'FINE' : (k==='AP' ? 'TG' : k);
-      const tk = document.createElement('div'); tk.className='tokens';
-      S.order.forEach(t=>{ if(S.teams[t].pos===i){ const d=document.createElement('span'); d.className='tok'+(S.control===t?' ctl':''); d.style.setProperty('--tc', TEAM[t].color); d.title=TEAM[t].name; tk.appendChild(d); } });
-      sq.appendChild(tk);
-      bd.appendChild(sq);
-    }
-  }
+  // tabellone ad anello
+  const bd = $('g-board');
+  bd.querySelectorAll('.sq').forEach(e=>e.remove());
+  BOARD.forEach((b,i)=>{
+    const sq = document.createElement('div');
+    const [r,c] = ringCell(i);
+    sq.style.gridRow = r; sq.style.gridColumn = c;
+    sq.className = 'sq' + (b.ap?' ap':'') + (b.wild?' wild':'') + (b.start?' start':'') + (b.last?' last':'');
+    sq.style.setProperty('--c', b.last ? 'var(--AP)' : CATS[b.c].c);
+    sq.textContent = b.start ? 'VIA' : b.last ? 'FINE' : b.wild ? 'J' : b.ap ? 'TG' : b.c;
+    sq.title = b.start ? 'Partenza (Oggetto)' : b.last ? 'Tutti giocano finale' : b.wild ? 'Jolly' : (b.ap?'Tutti giocano · ':'') + CATS[b.c].n;
+    const tk = document.createElement('div'); tk.className='tokens';
+    S.order.forEach(t=>{ if(S.teams[t].pos===i){ const d=document.createElement('span'); d.className='tok'+(S.control===t?' ctl':''); d.style.setProperty('--tc', TEAM[t].color); d.title=TEAM[t].name; tk.appendChild(d); } });
+    sq.appendChild(tk);
+    bd.appendChild(sq);
+  });
   renderEvent(); renderSave(); renderCard(); renderTools(); renderActions(); tick();
   const vt = viewTeam();
   archivedView = vt;
@@ -632,10 +679,12 @@ function renderGame(){
 let lastEvShown = null;
 function renderEvent(){
   const e = S.ev, box = $('g-event');
-  if(!e || e.t==='start'){ box.hidden = true; return; }
-  box.hidden = false;
+  const hide = !e || (e.t==='start' && !e.rolls);
+  box.hidden = hide; $('g-legend').hidden = !hide;
+  if(hide) return;
   let die = '', txt = '';
   const tn = t => TEAM[t] ? TEAM[t].name : '';
+  if(e.t==='start'){ txt = 'Dado di partenza: ' + S.order.map(t=>tn(t)+' '+e.rolls[t]).join(' · ') + '. Iniziano i ' + tn(e.first) + '!'; die = e.rolls[e.first]; }
   if(e.t==='guess') txt = tn(e.team) + ' hanno indovinato «' + esc(e.word) + '»' + (e.ap?' nel Tutti giocano':'') + '. Tirano il dado!';
   if(e.t==='roll'){ die = e.roll; txt = tn(e.team) + ' avanzano di ' + e.roll + (e.last ? ': sono all\'ultima casella! Per vincere devono indovinare un Tutti giocano.' : '. Nuova carta.'); }
   if(e.t==='timeout') txt = 'Tempo scaduto! Era «' + esc(e.word) + '». Tocca ai ' + tn(e.next) + '.';
@@ -667,8 +716,11 @@ function renderCard(){
   const iDraw = mt && S.drawers[mt]===myId && ['ready','drawing'].includes(S.phase);
   const showWord = iDraw || S.phase==='roll';
   box.className = 'wordcard' + (showWord?'':' hidden');
-  box.style.setProperty('--c', CATS[c.ap?'AP':c.cat].c);
-  box.innerHTML = '<div class="cat">'+(c.ap?'TG':c.cat)+'</div><div><div class="l">'+(c.ap?'Tutti giocano · ':'')+CATS[c.cat].n+'</div><div class="w">'+(showWord?esc(c.word):'? ? ?')+'</div></div>';
+  const k = c.cat || 'J';
+  box.style.setProperty('--c', CATS[k].c);
+  const label = (c.ap?'Tutti giocano · ':'') + (c.wild && c.cat ? 'Jolly · ' : '') + CATS[k].n;
+  const shown = c.word ? (showWord ? esc(c.word) : '? ? ?') : 'in scelta…';
+  box.innerHTML = '<div class="cat">'+(c.ap?'TG':c.wild?'J':c.cat)+'</div><div><div class="l">'+label+'</div><div class="w">'+shown+'</div></div>';
 }
 function renderTools(){
   const box = $('g-tools');
@@ -697,7 +749,12 @@ function renderActions(){
   const drawerOf = t => S.drawers[t];
   if(S.phase==='ready'){
     const starter = drawerOf(ctl);
-    if(starter===myId){
+    if(starter===myId && S.card && S.card.wild && !S.card.word){
+      say('Casella <strong>Jolly</strong>: scegli tu la categoria (annunciala alla squadra).');
+      const g = document.createElement('div'); g.className='picks';
+      ['O','P','A','D','M'].forEach(k=>{ const b=document.createElement('button'); b.className='pick'; b.style.setProperty('--c',CATS[k].c); b.textContent=CATS[k].n; b.onclick=async()=>{ g.querySelectorAll('button').forEach(x=>x.disabled=true); await commit('pick',k); }; g.appendChild(b); });
+      box.appendChild(g);
+    } else if(starter===myId){
       say(S.allPlay ? 'Tutti giocano: i disegnatori di ogni squadra hanno la stessa parola.' : 'Leggi la carta senza farla vedere.');
       add('Via! Inizia a disegnare', ()=>commit('go'));
     } else {
